@@ -1,0 +1,38 @@
+name: J613 grain candidate offline validation
+on:
+  push:
+    branches: [ci/106-hosted-offline]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  offline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          repository: tonibergholm/libva-v4l2_request
+          ref: 9265a600f41c0844e7d75e424b35622638046d65
+          persist-credentials: false
+      - name: Install offline build prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends meson ninja-build libva-dev libdrm-dev ffmpeg libavformat-dev libavcodec-dev libavutil-dev libswscale-dev
+      - name: Record exact source and toolchain
+        run: |
+          test "$(git rev-parse HEAD)" = 9265a600f41c0844e7d75e424b35622638046d65
+          git status --porcelain
+          cc --version | head -1
+          meson --version
+          ninja --version
+          pkg-config --modversion libva libdrm
+      - name: Full sanitizer suite
+        run: |
+          meson setup build -Db_sanitize=address,undefined
+          meson compile -C build -j 2
+          meson test -C build --no-rebuild --num-processes 2 --print-errorlogs
+      - name: Software frame and shared-context checks
+        run: |
+          sh tests/frame-check.sh
+          sh tests/shared-contexts.sh
